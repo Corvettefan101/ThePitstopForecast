@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The PitStop Forecast</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="https://i.imgur.com/ThhJ0CT.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Load Inter and Oswald fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Darker background (gray-900) */
+            color: #e5e7eb; /* Light text (gray-200) */
+        }
+        .font-oswald {
+            font-family: 'Oswald', sans-serif;
+        }
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.05); /* Slightly less opaque */
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1); /* Lighter border */
+            box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.2); /* Adjusted shadow */
+        }
+        .series-tab.active {
+            background-color: #374151; /* Darker gray for active tab (gray-700) */
+            color: #ffffff;
+            border-bottom-width: 2px;
+            border-bottom-color: #dc2626; /* Red accent (red-600) */
+        }
+         .series-tab:not(.active):hover {
+             background-color: #1f2937; /* Slightly lighter dark bg on hover (gray-800) */
+             color: #f3f4f6; /* Lighter gray text on hover */
+         }
+        .track-item:hover {
+            background-color: rgba(220, 38, 38, 0.1); /* Red tint on hover */
+            border-color: rgba(220, 38, 38, 0.3);
+        }
+        .weather-icon {
+            width: 60px;
+            height: 60px;
+        }
+        /* Scrollbar styling for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(220, 38, 38, 0.5); /* Red scrollbar hover */
+        }
+        .radar-container iframe {
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Custom red text color matching Tailwind's red-500 */
+        .text-accent-red {
+            color: #ef4444; /* red-500 */
+        }
+        /* Custom red focus ring */
+        .focus-ring-red {
+             --tw-ring-color: #ef4444; /* red-500 */
+        }
+        .focus-border-red {
+            --tw-border-opacity: 1;
+             border-color: #ef4444; /* red-500 */
+        }
+        .placeholder-gray-500::-webkit-input-placeholder { color: #6b7280; }
+        .placeholder-gray-500::-moz-placeholder { color: #6b7280; }
+        .placeholder-gray-500:-ms-input-placeholder { color: #6b7280; }
+        .placeholder-gray-500::-ms-input-placeholder { color: #6b7280; }
+        .placeholder-gray-500::placeholder { color: #6b7280; }
+
+
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo } = React;
+
+        // --- Constants ---
+        const RACING_SERIES = {
+            F1: "Formula 1",
+            NASCAR: "NASCAR",
+            IndyCar: "IndyCar",
+            WEC: "WEC",
+            IMSA: "IMSA"
+        };
+
+        const INITIAL_TRACKS_DATA = [
+            // F1 2025
+            { id: 'f1_melbourne', name: "Albert Park Circuit", series: "F1", city: "Melbourne", country: "Australia", latitude: -37.8497, longitude: 144.968 },
+            { id: 'f1_shanghai', name: "Shanghai International Circuit", series: "F1", city: "Shanghai", country: "China", latitude: 31.3389, longitude: 121.2206 },
+            { id: 'f1_suzuka', name: "Suzuka International Racing Course", series: "F1", city: "Suzuka", country: "Japan", latitude: 34.8431, longitude: 136.541 },
+            { id: 'f1_sakhir', name: "Bahrain International Circuit", series: "F1", city: "Sakhir", country: "Bahrain", latitude: 26.0325, longitude: 50.5106 },
+            { id: 'f1_jeddah', name: "Jeddah Corniche Circuit", series: "F1", city: "Jeddah", country: "Saudi Arabia", latitude: 21.6332, longitude: 39.1043 },
+            { id: 'f1_miami', name: "Miami International Autodrome", series: "F1", city: "Miami Gardens", country: "USA", latitude: 25.9580, longitude: -80.2389 },
+            { id: 'f1_imola', name: "Autodromo Enzo e Dino Ferrari (Imola)", series: "F1", city: "Imola", country: "Italy", latitude: 44.3439, longitude: 11.7167 },
+            { id: 'f1_monaco', name: "Circuit de Monaco", series: "F1", city: "Monte Carlo", country: "Monaco", latitude: 43.7347, longitude: 7.4206 },
+            { id: 'f1_barcelona', name: "Circuit de Barcelona-Catalunya", series: "F1", city: "Montmeló", country: "Spain", latitude: 41.5700, longitude: 2.2611 },
+            { id: 'f1_montreal', name: "Circuit Gilles Villeneuve", series: "F1", city: "Montreal", country: "Canada", latitude: 45.5000, longitude: -73.5228 },
+            { id: 'f1_spielberg', name: "Red Bull Ring", series: "F1", city: "Spielberg", country: "Austria", latitude: 47.2197, longitude: 14.7647 },
+            { id: 'f1_silverstone', name: "Silverstone Circuit", series: "F1", city: "Silverstone", country: "UK", latitude: 52.0786, longitude: -1.0169 },
+            { id: 'f1_spa', name: "Circuit de Spa-Francorchamps", series: "F1", city: "Stavelot", country: "Belgium", latitude: 50.4372, longitude: 5.9713 },
+            { id: 'f1_budapest', name: "Hungaroring", series: "F1", city: "Mogyoród", country: "Hungary", latitude: 47.5789, longitude: 19.2486 },
+            { id: 'f1_zandvoort', name: "Circuit Zandvoort", series: "F1", city: "Zandvoort", country: "Netherlands", latitude: 52.3888, longitude: 4.5409 },
+            { id: 'f1_monza', name: "Monza Circuit", series: "F1", city: "Monza", country: "Italy", latitude: 45.6156, longitude: 9.2811 },
+            { id: 'f1_baku', name: "Baku City Circuit", series: "F1", city: "Baku", country: "Azerbaijan", latitude: 40.3725, longitude: 49.8533 },
+            { id: 'f1_singapore', name: "Marina Bay Street Circuit", series: "F1", city: "Singapore", country: "Singapore", latitude: 1.2914, longitude: 103.864 },
+            { id: 'f1_austin_cota', name: "Circuit of the Americas (COTA)", series: "F1", city: "Austin", country: "USA", latitude: 30.1328, longitude: -97.6411 },
+            { id: 'f1_mexico_city', name: "Autódromo Hermanos Rodríguez", series: "F1", city: "Mexico City", country: "Mexico", latitude: 19.4042, longitude: -99.0907 },
+            { id: 'f1_sao_paulo', name: "Autódromo José Carlos Pace (Interlagos)", series: "F1", city: "São Paulo", country: "Brazil", latitude: -23.7036, longitude: -46.6997 },
+            { id: 'f1_las_vegas', name: "Las Vegas Strip Circuit", series: "F1", city: "Las Vegas", country: "USA", latitude: 36.1147, longitude: -115.1728 }, 
+            { id: 'f1_lusail', name: "Lusail International Circuit", series: "F1", city: "Lusail", country: "Qatar", latitude: 25.4900, longitude: 51.4542 },
+            { id: 'f1_yas_marina', name: "Yas Marina Circuit", series: "F1", city: "Abu Dhabi", country: "UAE", latitude: 24.4672, longitude: 54.6031 },
+
+            // NASCAR 2025
+            { id: 'nascar_daytona', name: "Daytona International Speedway", series: "NASCAR", city: "Daytona Beach", country: "USA", latitude: 29.1856, longitude: -81.0705 },
+            { id: 'nascar_atlanta', name: "Atlanta Motor Speedway", series: "NASCAR", city: "Hampton", country: "USA", latitude: 33.3830, longitude: -84.3157 },
+            { id: 'nascar_austin_cota', name: "Circuit of the Americas (COTA)", series: "NASCAR", city: "Austin", country: "USA", latitude: 30.1328, longitude: -97.6411 },
+            { id: 'nascar_phoenix', name: "Phoenix Raceway", series: "NASCAR", city: "Avondale", country: "USA", latitude: 33.3749, longitude: -112.3106 },
+            { id: 'nascar_las_vegas_motor_speedway', name: "Las Vegas Motor Speedway", series: "NASCAR", city: "Las Vegas", country: "USA", latitude: 36.2718, longitude: -115.0108 },
+            { id: 'nascar_homestead', name: "Homestead-Miami Speedway", series: "NASCAR", city: "Homestead", country: "USA", latitude: 25.5100, longitude: -80.4083 },
+            { id: 'nascar_martinsville', name: "Martinsville Speedway", series: "NASCAR", city: "Ridgeway", country: "USA", latitude: 36.6342, longitude: -79.8522 },
+            { id: 'nascar_darlington', name: "Darlington Raceway", series: "NASCAR", city: "Darlington", country: "USA", latitude: 34.2953, longitude: -79.9050 },
+            { id: 'nascar_bristol', name: "Bristol Motor Speedway", series: "NASCAR", city: "Bristol", country: "USA", latitude: 36.5156, longitude: -82.2594 },
+            { id: 'nascar_talladega', name: "Talladega Superspeedway", series: "NASCAR", city: "Lincoln", country: "USA", latitude: 33.5677, longitude: -86.0557 },
+            { id: 'nascar_texas', name: "Texas Motor Speedway", series: "NASCAR", city: "Fort Worth", country: "USA", latitude: 33.0371, longitude: -97.2827 },
+            { id: 'nascar_kansas', name: "Kansas Speedway", series: "NASCAR", city: "Kansas City", country: "USA", latitude: 39.1166, longitude: -94.8303 },
+            { id: 'nascar_charlotte', name: "Charlotte Motor Speedway", series: "NASCAR", city: "Concord", country: "USA", latitude: 35.3518, longitude: -80.6846 },
+            { id: 'nascar_nashville_superspeedway', name: "Nashville Superspeedway", series: "NASCAR", city: "Lebanon", country: "USA", latitude: 36.0908, longitude: -86.3522 },
+            { id: 'nascar_michigan', name: "Michigan International Speedway", series: "NASCAR", city: "Brooklyn", country: "USA", latitude: 42.0653, longitude: -84.2419 },
+            { id: 'nascar_mexico_city_ahr', name: "Autódromo Hermanos Rodríguez", series: "NASCAR", city: "Mexico City", country: "Mexico", latitude: 19.4042, longitude: -99.0907 },
+            { id: 'nascar_pocono', name: "Pocono Raceway", series: "NASCAR", city: "Long Pond", country: "USA", latitude: 41.0542, longitude: -75.5094 },
+            { id: 'nascar_chicago_street', name: "Chicago Street Race", series: "NASCAR", city: "Chicago", country: "USA", latitude: 41.8781, longitude: -87.6298 }, 
+            { id: 'nascar_sonoma', name: "Sonoma Raceway", series: "NASCAR", city: "Sonoma", country: "USA", latitude: 38.1625, longitude: -122.4580 },
+            { id: 'nascar_dover', name: "Dover Motor Speedway", series: "NASCAR", city: "Dover", country: "USA", latitude: 39.1891, longitude: -75.5336 },
+            { id: 'nascar_indy_oval', name: "Indianapolis Motor Speedway (Oval)", series: "NASCAR", city: "Speedway", country: "USA", latitude: 39.7950, longitude: -86.2344 },
+            { id: 'nascar_iowa', name: "Iowa Speedway", series: "NASCAR", city: "Newton", country: "USA", latitude: 41.6919, longitude: -93.0689 },
+            { id: 'nascar_watkins_glen', name: "Watkins Glen International", series: "NASCAR", city: "Watkins Glen", country: "USA", latitude: 42.3369, longitude: -76.9269 },
+            { id: 'nascar_richmond', name: "Richmond Raceway", series: "NASCAR", city: "Richmond", country: "USA", latitude: 37.5919, longitude: -77.4167 },
+            { id: 'nascar_gateway', name: "World Wide Technology Raceway (Gateway)", series: "NASCAR", city: "Madison", country: "USA", latitude: 38.6489, longitude: -90.1317 },
+            { id: 'nascar_new_hampshire', name: "New Hampshire Motor Speedway", series: "NASCAR", city: "Loudon", country: "USA", latitude: 43.3625, longitude: -71.4608 },
+            { id: 'nascar_north_wilkesboro', name: "North Wilkesboro Speedway", series: "NASCAR", city: "North Wilkesboro", country: "USA", latitude: 36.1389, longitude: -81.0708 },
+            { id: 'nascar_bowman_gray', name: "Bowman Gray Stadium", series: "NASCAR", city: "Winston-Salem", country: "USA", latitude: 36.1089, longitude: -80.2803 },
+
+            // IndyCar 2025
+            { id: 'indy_st_pete', name: "Streets of St. Petersburg", series: "IndyCar", city: "St. Petersburg", country: "USA", latitude: 27.7653, longitude: -82.6300 },
+            { id: 'indy_thermal_club', name: "The Thermal Club", series: "IndyCar", city: "Thermal", country: "USA", latitude: 33.6300, longitude: -116.1500 }, 
+            { id: 'indy_long_beach', name: "Streets of Long Beach", series: "IndyCar", city: "Long Beach", country: "USA", latitude: 33.7661, longitude: -118.1893 },
+            { id: 'indy_barber', name: "Barber Motorsports Park", series: "IndyCar", city: "Birmingham", country: "USA", latitude: 33.5314, longitude: -86.6219 },
+            { id: 'indy_ims_road', name: "IMS Road Course", series: "IndyCar", city: "Speedway", country: "USA", latitude: 39.7950, longitude: -86.2344 }, 
+            { id: 'indy_ims_oval', name: "Indianapolis 500 (IMS Oval)", series: "IndyCar", city: "Speedway", country: "USA", latitude: 39.7950, longitude: -86.2344 },
+            { id: 'indy_detroit', name: "Streets of Detroit", series: "IndyCar", city: "Detroit", country: "USA", latitude: 42.3314, longitude: -83.0458 }, 
+            { id: 'indy_gateway', name: "World Wide Technology Raceway", series: "IndyCar", city: "Madison", country: "USA", latitude: 38.6489, longitude: -90.1317 },
+            { id: 'indy_road_america', name: "Road America", series: "IndyCar", city: "Elkhart Lake", country: "USA", latitude: 43.8000, longitude: -87.9919 },
+            { id: 'indy_mid_ohio', name: "Mid-Ohio Sports Car Course", series: "IndyCar", city: "Lexington", country: "USA", latitude: 40.6911, longitude: -82.6389 },
+            { id: 'indy_iowa', name: "Iowa Speedway", series: "IndyCar", city: "Newton", country: "USA", latitude: 41.6919, longitude: -93.0689 },
+            { id: 'indy_toronto', name: "Exhibition Place (Streets of Toronto)", series: "IndyCar", city: "Toronto", country: "Canada", latitude: 43.6333, longitude: -79.4167 },
+            { id: 'indy_laguna_seca', name: "WeatherTech Raceway Laguna Seca", series: "IndyCar", city: "Monterey", country: "USA", latitude: 36.5847, longitude: -121.7536 },
+            { id: 'indy_portland', name: "Portland International Raceway", series: "IndyCar", city: "Portland", country: "USA", latitude: 45.5958, longitude: -122.6972 },
+            { id: 'indy_milwaukee_mile', name: "Milwaukee Mile", series: "IndyCar", city: "West Allis", country: "USA", latitude: 43.0217, longitude: -88.0117 },
+            { id: 'indy_nashville_superspeedway', name: "Nashville Superspeedway", series: "IndyCar", city: "Lebanon", country: "USA", latitude: 36.0908, longitude: -86.3522 },
+
+            // WEC 2025
+            { id: 'wec_lusail', name: "Lusail International Circuit (Qatar 1812km)", series: "WEC", city: "Lusail", country: "Qatar", latitude: 25.4900, longitude: 51.4542 },
+            { id: 'wec_imola', name: "Autodromo Enzo e Dino Ferrari (6H of Imola)", series: "WEC", city: "Imola", country: "Italy", latitude: 44.3439, longitude: 11.7167 },
+            { id: 'wec_spa', name: "Circuit de Spa-Francorchamps (6H of Spa)", series: "WEC", city: "Stavelot", country: "Belgium", latitude: 50.4372, longitude: 5.9713 },
+            { id: 'wec_le_mans', name: "Circuit de la Sarthe (24H of Le Mans)", series: "WEC", city: "Le Mans", country: "France", latitude: 47.9500, longitude: 0.2240 },
+            { id: 'wec_sao_paulo', name: "Interlagos Circuit (6H of São Paulo)", series: "WEC", city: "São Paulo", country: "Brazil", latitude: -23.7036, longitude: -46.6997 },
+            { id: 'wec_austin_cota', name: "Circuit of the Americas (Lone Star Le Mans)", series: "WEC", city: "Austin", country: "USA", latitude: 30.1328, longitude: -97.6411 },
+            { id: 'wec_fuji', name: "Fuji Speedway (6H of Fuji)", series: "WEC", city: "Oyama", country: "Japan", latitude: 35.3717, longitude: 138.9269 },
+            { id: 'wec_sakhir', name: "Bahrain International Circuit (8H of Bahrain)", series: "WEC", city: "Sakhir", country: "Bahrain", latitude: 26.0325, longitude: 50.5106 },
+
+            // IMSA 2025
+            { id: 'imsa_daytona', name: "Rolex 24 At Daytona (Daytona Intl. Speedway)", series: "IMSA", city: "Daytona Beach", country: "USA", latitude: 29.1856, longitude: -81.0705 },
+            { id: 'imsa_sebring', name: "Mobil 1 Twelve Hours of Sebring (Sebring Intl. Raceway)", series: "IMSA", city: "Sebring", country: "USA", latitude: 27.4549, longitude: -81.3480 },
+            { id: 'imsa_long_beach', name: "Acura Grand Prix of Long Beach", series: "IMSA", city: "Long Beach", country: "USA", latitude: 33.7661, longitude: -118.1893 },
+            { id: 'imsa_laguna_seca', name: "Motul Course de Monterey (WeatherTech Raceway Laguna Seca)", series: "IMSA", city: "Monterey", country: "USA", latitude: 36.5847, longitude: -121.7536 },
+            { id: 'imsa_detroit', name: "Chevrolet Detroit Sports Car Classic (Streets of Detroit)", series: "IMSA", city: "Detroit", country: "USA", latitude: 42.3314, longitude: -83.0458 },
+            { id: 'imsa_watkins_glen', name: "Sahlen's Six Hours of The Glen (Watkins Glen Intl.)", series: "IMSA", city: "Watkins Glen", country: "USA", latitude: 42.3369, longitude: -76.9269 },
+            { id: 'imsa_ctmp', name: "Chevrolet Grand Prix (Canadian Tire Motorsport Park)", series: "IMSA", city: "Bowmanville", country: "Canada", latitude: 44.0513, longitude: -78.6756 },
+            { id: 'imsa_road_america', name: "IMSA SportsCar Weekend (Road America)", series: "IMSA", city: "Elkhart Lake", country: "USA", latitude: 43.8000, longitude: -87.9919 },
+            { id: 'imsa_vir', name: "Michelin GT Challenge at VIR (Virginia Intl. Raceway)", series: "IMSA", city: "Alton", country: "USA", latitude: 36.5636, longitude: -79.2053 },
+            { id: 'imsa_indy_road', name: "Tirerack.com Battle on the Bricks (IMS Road Course)", series: "IMSA", city: "Speedway", country: "USA", latitude: 39.7950, longitude: -86.2344 },
+            { id: 'imsa_road_atlanta', name: "Motul Petit Le Mans (Michelin Raceway Road Atlanta)", series: "IMSA", city: "Braselton", country: "USA", latitude: 34.1460, longitude: -83.8210 },
+        ];
+
+
+        // --- Helper Functions ---
+        function getWeatherDescription(code) {
+            const descriptions = {
+                0: {desc: "Clear sky", icon: "☀️"}, 1: {desc: "Mainly clear", icon: "🌤️"}, 2: {desc: "Partly cloudy", icon: "🌥️"},
+                3: {desc: "Overcast", icon: "☁️"}, 45: {desc: "Fog", icon: "🌫️"}, 48: {desc: "Depositing rime fog", icon: "🌫️"},
+                51: {desc: "Light drizzle", icon: "🌦️"}, 53: {desc: "Moderate drizzle", icon: "🌦️"}, 55: {desc: "Dense drizzle", icon: "🌧️"},
+                56: {desc: "Light freezing drizzle", icon: "🌨️"}, 57: {desc: "Dense freezing drizzle", icon: "🌨️"},
+                61: {desc: "Slight rain", icon: "🌦️"}, 63: {desc: "Moderate rain", icon: "🌧️"}, 65: {desc: "Heavy rain", icon: "🌧️"},
+                66: {desc: "Light freezing rain", icon: "🌨️"}, 67: {desc: "Heavy freezing rain", icon: "🌨️"},
+                71: {desc: "Slight snow fall", icon: "🌨️"}, 73: {desc: "Moderate snow fall", icon: "❄️"}, 75: {desc: "Heavy snow fall", icon: "❄️"},
+                77: {desc: "Snow grains", icon: "❄️"}, 80: {desc: "Slight rain showers", icon: "🌦️"}, 81: {desc: "Moderate rain showers", icon: "🌧️"},
+                82: {desc: "Violent rain showers", icon: "⛈️"}, 85: {desc: "Slight snow showers", icon: "🌨️"}, 86: {desc: "Heavy snow showers", icon: "❄️"},
+                95: {desc: "Thunderstorm: Slight or moderate", icon: "⛈️"}, 96: {desc: "Thunderstorm with slight hail", icon: "⛈️"},
+                99: {desc: "Thunderstorm with heavy hail", icon: "⛈️"},
+            };
+            return descriptions[code] || {desc: "Unknown", icon: "❓"};
+        }
+
+        function formatTime(isoString, timeZone) {
+            if (!isoString) return "N/A";
+            try {
+                const dateObj = new Date(isoString);
+                return dateObj.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    timeZoneName: 'short', 
+                    timeZone: timeZone 
+                });
+            } catch (e) {
+                console.error("Error formatting time:", e, "Input:", isoString, "Target TZ:", timeZone);
+                const fallbackDate = new Date(isoString);
+                if (!isNaN(fallbackDate)) {
+                    return fallbackDate.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}) + " (Local)";
+                }
+                return "Invalid Time";
+            }
+        }
+
+
+        // --- API Fetching ---
+        const fetchWeatherData = async (latitude, longitude) => {
+            const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=America%2FNew_York`;
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error("Error fetching weather data:", error);
+                return null;
+            }
+        };
+
+        const fetchGeocodingData = async (locationName) => {
+            const apiUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationName)}&count=1&language=en&format=json`;
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                return data.results && data.results.length > 0 ? data.results[0] : null;
+            } catch (error) {
+                console.error("Error fetching geocoding data:", error);
+                return null;
+            }
+        };
+
+        // --- Components ---
+        function SeriesTabs({ selectedSeries, onSelectSeries }) {
+            return (
+                <div className="flex flex-wrap space-x-1 sm:space-x-2 mb-6 border-b border-gray-700">
+                    {Object.entries(RACING_SERIES).map(([key, name]) => (
+                        <button
+                            key={key}
+                            onClick={() => onSelectSeries(key)}
+                            className={`series-tab px-3 py-3 sm:px-4 text-sm sm:text-base font-medium rounded-t-lg transition-colors duration-150 ease-in-out focus:outline-none whitespace-nowrap ${
+                                selectedSeries === key ? 'active' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-300'
+                            }`}
+                        >
+                            {name}
+                        </button>
+                    ))}
+                </div>
+            );
+        }
+
+        function TrackSearch({ onSearch }) {
+            const [searchTerm, setSearchTerm] = useState("");
+            const handleSearch = (e) => {
+                e.preventDefault();
+                if (searchTerm.trim()) {
+                    onSearch(searchTerm.trim());
+                    setSearchTerm(""); 
+                }
+            };
+            return (
+                <form onSubmit={handleSearch} className="mb-6">
+                    <div className="relative">
+                        <input
+                            type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search city or location (e.g., 'Monaco')"
+                            className="w-full p-3 pr-10 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus-ring-red focus-border-red outline-none placeholder-gray-500 text-white"
+                        />
+                        <button type="submit" className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-accent-red">
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd"></path></svg>
+                        </button>
+                    </div>
+                </form>
+            );
+        }
+        
+        function TrackList({ tracks, onSelectTrack, selectedSeries }) {
+            const filteredTracks = tracks.filter(track => track.series === selectedSeries);
+            if (filteredTracks.length === 0) {
+                return <p className="text-gray-400">No pre-defined tracks for this series. Use search for any location.</p>;
+            }
+            return (
+                <div className="space-y-3 max-h-60 sm:max-h-80 lg:max-h-96 overflow-y-auto pr-2">
+                    {filteredTracks.map(track => (
+                        <div
+                            key={track.id} 
+                            onClick={() => onSelectTrack(track)}
+                            className="track-item p-4 glassmorphism rounded-lg cursor-pointer transition-all duration-200 hover:shadow-lg"
+                        >
+                            <h3 className="font-semibold text-lg text-accent-red">{track.name}</h3>
+                            <p className="text-sm text-gray-300">{track.city}, {track.country}</p>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        function RadarDisplay({ latitude, longitude }) {
+            const radarUrl = useMemo(() => 
+                `https://www.rainviewer.com/map.html?loc=${latitude},${longitude},7&o=80&c=2&l=1& વરસ=0&부모=0&퍼센트=0&말하다=0&지도=0&애니메이션=1&팝업=0&크기 조정=1&마커=1&주석=1&언어=en&기본값=1&축척=1&플레이백=1&폭풍=0`,
+                [latitude, longitude]
+            );
+
+            if (latitude === null || longitude === null) {
+                return <p className="text-gray-400 text-center mt-4">Radar unavailable for this selection.</p>;
+            }
+            
+            return (
+                <div className="mt-8 p-4 bg-black bg-opacity-20 rounded-lg radar-container">
+                    <h3 className="text-xl font-semibold mb-3 text-accent-red">Weather Radar</h3>
+                    <iframe
+                        src={radarUrl}
+                        width="100%"
+                        height="400" 
+                        frameBorder="0"
+                        allowFullScreen
+                        title="Weather Radar Map"
+                    ></iframe>
+                    <p className="text-xs text-gray-500 mt-2 text-center">Radar provided by RainViewer.</p>
+                </div>
+            );
+        }
+
+
+        function WeatherDisplay({ weatherData, locationName }) {
+            if (!weatherData) return <div className="mt-6 p-6 glassmorphism rounded-lg text-center text-gray-300">Search or select a track.</div>;
+            if (weatherData.error) return <div className="mt-6 p-6 glassmorphism rounded-lg text-center text-red-400">Could not retrieve weather.</div>;
+
+            const { current, daily, current_units, daily_units, latitude, longitude, timezone } = weatherData;
+            const currentWeatherDesc = getWeatherDescription(current.weather_code);
+            const formattedCurrentTime = formatTime(current.time, timezone);
+
+
+            return (
+                <div className="mt-6 p-6 glassmorphism rounded-lg shadow-xl">
+                    <h2 className="text-3xl font-bold mb-1 text-white">Weather for {locationName}</h2>
+                    <div className="flex justify-between items-baseline mb-4">
+                        <p className="text-sm text-gray-400">Lat: {latitude.toFixed(2)}, Lon: {longitude.toFixed(2)}</p>
+                        {current.time && <p className="text-xs text-gray-500">Current as of: {formattedCurrentTime}</p>}
+                    </div>
+
+
+                    <div className="mb-8 p-4 bg-black bg-opacity-20 rounded-lg">
+                        <h3 className="text-xl font-semibold mb-3 text-accent-red">Current Conditions</h3>
+                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div className="text-center sm:text-left">
+                                <p className="text-5xl font-bold text-white">{Math.round(current.temperature_2m)}{current_units.temperature_2m}</p>
+                                <p className="text-lg text-gray-300">Feels like {Math.round(current.apparent_temperature)}{current_units.apparent_temperature}</p>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-6xl weather-icon mb-1">{currentWeatherDesc.icon}</div>
+                                <p className="text-lg text-gray-200">{currentWeatherDesc.desc}</p>
+                            </div>
+                            <div className="text-sm text-gray-300 text-center sm:text-right">
+                                <p>Wind: {Math.round(current.wind_speed_10m)} {current_units.wind_speed_10m}</p>
+                                <p>Direction: {current.wind_direction_10m}°</p>
+                                <p>Precip: {current.precipitation} {current_units.precipitation}</p>
+                                <p>Cloud Cover: {current.cloud_cover}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    <h3 className="text-xl font-semibold mb-4 text-accent-red">7-Day Forecast</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                        {daily.time.map((date, index) => {
+                            const dayWeather = getWeatherDescription(daily.weather_code[index]);
+                            const dayDate = new Date(date); 
+                            const utcDate = new Date(dayDate.getUTCFullYear(), dayDate.getUTCMonth(), dayDate.getUTCDate());
+                            const dayName = index === 0 ? "Today" : utcDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+                            return (
+                                <div key={date} className="p-3 bg-black bg-opacity-20 rounded-lg text-center">
+                                    <p className="font-medium text-gray-200">{dayName}</p>
+                                    <div className="text-3xl my-1">{dayWeather.icon}</div>
+                                    <p className="text-sm text-gray-300 truncate" title={dayWeather.desc}>{dayWeather.desc}</p>
+                                    <p className="font-semibold text-white mt-1">
+                                        {Math.round(daily.temperature_2m_max[index])}{daily_units.temperature_2m_max} / {Math.round(daily.temperature_2m_min[index])}{daily_units.temperature_2m_min}
+                                    </p>
+                                    <p className="text-xs text-accent-red mt-1">💧 {daily.precipitation_probability_max[index]}%</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    
+                    <RadarDisplay latitude={latitude} longitude={longitude} />
+
+                    <p className="text-xs text-gray-500 mt-6 text-center">Weather data by Open-Meteo.com (Temperatures rounded). Wind in MPH, Precip. in Inches.</p>
+                </div>
+            );
+        }
+
+        // --- Main App Component ---
+        function App() {
+            const [selectedSeries, setSelectedSeries] = useState(Object.keys(RACING_SERIES)[0]);
+            const [tracks] = useState(INITIAL_TRACKS_DATA); 
+            const [selectedTrackName, setSelectedTrackName] = useState(null);
+            const [weatherData, setWeatherData] = useState(null); 
+            const [isLoading, setIsLoading] = useState(false);
+            const [error, setError] = useState(null);
+
+            const fetchAndSetWeather = useCallback(async (latitude, longitude, name) => {
+                setIsLoading(true);
+                setError(null);
+                setSelectedTrackName(name);
+                const data = await fetchWeatherData(latitude, longitude);
+                if (data) {
+                    setWeatherData(data); 
+                } else {
+                    setError(`Failed to fetch weather data for ${name}.`);
+                    setWeatherData({ error: true, latitude: null, longitude: null }); 
+                }
+                setIsLoading(false);
+            }, []);
+
+            const handleSelectTrack = useCallback((track) => {
+                fetchAndSetWeather(track.latitude, track.longitude, track.name);
+            }, [fetchAndSetWeather]);
+
+            const handleSearchLocation = useCallback(async (locationName) => {
+                setIsLoading(true);
+                setError(null);
+                setSelectedTrackName(locationName);
+                const geoData = await fetchGeocodingData(locationName);
+                if (geoData) {
+                    fetchAndSetWeather(geoData.latitude, geoData.longitude, geoData.name || locationName);
+                } else {
+                    setError(`Could not find location: ${locationName}.`);
+                    setWeatherData({ error: true, latitude: null, longitude: null });
+                    setIsLoading(false);
+                }
+            }, [fetchAndSetWeather]);
+            
+            useEffect(() => {
+                const defaultTracksForSeries = tracks.filter(t => t.series === selectedSeries);
+                if (defaultTracksForSeries.length > 0) {
+                    handleSelectTrack(defaultTracksForSeries[0]);
+                } else {
+                    setWeatherData(null); 
+                    setSelectedTrackName(`No predefined tracks for ${RACING_SERIES[selectedSeries]}`);
+                }
+            }, [selectedSeries, tracks, handleSelectTrack]);
+
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-4 sm:p-8"> 
+                    <header className="mb-8 flex flex-col items-center"> 
+                        <img 
+                            src="https://i.imgur.com/ThhJ0CT.png" 
+                            alt="PitStop Forecast Logo" 
+                            className="h-24 sm:h-28 w-auto mb-2" 
+                            onError={(e) => { e.target.style.display = 'none'; console.error('Logo failed to load'); }} 
+                        />
+                        <h1 className="font-oswald text-4xl sm:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-300 tracking-wide uppercase">
+                            PitStop Forecast
+                        </h1>
+                    </header>
+
+                    <div className="max-w-6xl mx-auto">
+                        <SeriesTabs selectedSeries={selectedSeries} onSelectSeries={setSelectedSeries} />
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="md:col-span-1 space-y-6">
+                                <div className="p-5 glassmorphism rounded-lg">
+                                    <h2 className="text-2xl font-semibold mb-4 text-accent-red">Search Location</h2>
+                                    <TrackSearch onSearch={handleSearchLocation} />
+                                </div>
+                                <div className="p-5 glassmorphism rounded-lg">
+                                    <h2 className="text-2xl font-semibold mb-4 text-accent-red">{RACING_SERIES[selectedSeries]} Tracks</h2>
+                                    <TrackList tracks={tracks} onSelectTrack={handleSelectTrack} selectedSeries={selectedSeries} />
+                                </div>
+                            </div>
+
+                            <div className="md:col-span-2">
+                                {isLoading && (
+                                    <div className="flex justify-center items-center h-64">
+                                        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-red-600"></div>
+                                        <p className="ml-4 text-xl text-gray-300">Fetching weather...</p>
+                                    </div>
+                                )}
+                                {!isLoading && error && (
+                                    <div className="p-6 bg-red-900 bg-opacity-50 text-red-200 rounded-lg text-center">
+                                        <p className="font-semibold text-lg">Error</p>
+                                        <p>{error}</p>
+                                    </div>
+                                )}
+                                {!isLoading && weatherData && weatherData.latitude !== undefined && weatherData.longitude !== undefined && !weatherData.error && (
+                                    <WeatherDisplay weatherData={weatherData} locationName={selectedTrackName || "Selected Location"} />
+                                )}
+                                {!isLoading && (!weatherData || weatherData.error || weatherData.latitude === undefined || weatherData.longitude === undefined) && !error && (
+                                     <div className="mt-6 p-6 glassmorphism rounded-lg text-center text-gray-300">
+                                        <p>Welcome! Select a predefined track or search for any location.</p>
+                                        {selectedTrackName && selectedTrackName.startsWith("No predefined tracks") && <p className="mt-2">{selectedTrackName}</p>}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <footer className="text-center mt-12 py-4 border-t border-gray-700">
+                        <p className="text-sm text-gray-500 mb-2">&copy; {new Date().getFullYear()} PitStop Forecast. All rights reserved (concept).</p>
+                        <p className="text-sm text-gray-400">
+                            Want race start times for each series, go to <a href="https://pitstopsync.pages.dev" target="_blank" rel="noopener noreferrer" className="text-accent-red hover:underline">ThePitStopSync</a>
+                        </p>
+                    </footer>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
